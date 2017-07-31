@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>聊天室</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #outer{
+            width: 100%;
+            height:100%;
+        }
+        #loginBox{
+            position: absolute;
+            width:300px;
+            height:400px;
+            left:50px;
+            top:50%;
+            margin-top: -200px;
+            background: #696969;
+        }
+        #title{
+            height:50px;
+            width:100%;
+            border-bottom: 1px solid #000000;
+        }
+        #title h2{
+            height:50px;
+            line-height: 50px;
+            font-size: 25px;
+            color:#F7F7F7;
+            text-align: center;
+        }
+        #main{
+            height:200px;
+            margin:20px;
+            position: relative;
+        }
+        label{
+            vertical-align: middle;
+            font-size: 20px;
+            color: #fff;
+        }
+        #chatName{
+            height: 30px;
+            display: inline-block;
+            left: 10%;
+            width:80%;
+            margin: 15px 10%;
+        }
+        #userName{
+            height: 30px;
+            display: inline-block;
+            left: 10%;
+            width:80%;
+            margin: 15px 10%;
+        }
+        #passWord{
+            height: 30px;
+            display: inline-block;
+            left: 10%;
+            width:80%;
+            margin: 15px 10%;
+        }
+        #login{
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            display: inline-block;
+            left: 10%;
+            width:70%;
+            margin: 15px 15%;
+            color: #ffffff;
+            background: #91E85F;
+            border: 5px solid #91E85F;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat">
+            <div class="sidebar">
+                <card></card>
+                <list></list>
+            </div>
+            <div class="main">
+                <message></message>
+                <send></send>
+            </div>
+    </div>
+    <div id="outer">
+        <div id="loginBox">
+            <div id="title">
+                <h2>登录窗口</h2>
+            </div>
+            <div id="main">
+                <label for="chatName">群名:</label>
+                <input type='text' id="chatName" placeholder="请输入群聊名" autofocus>
+                <label for="userName">昵称:</label>
+                <input type="text" id="userName" placeholder="请输入昵称">
+                <label for="passWord">密码:</label>
+                <input type="password" id="passWord" placeholder="请输入密码">
+                <input type="button"   id="login" value="登录">
+            </div>
+        </div>
+    </div>
+    <script src="socket.io.js"></script>
+    <script src="vue.js"></script>
+    <script src="vuex.js"></script>
+    <script src="jquery-3.2.1.js"></script>
+    <script>
+        var socket=0;
+        var mess={};
+        var userIn={};
+        var store=null;
+        $(document).ready(function () {
+            $('#login').click(function () {
+                var chatname = $('#chatName').val();
+                var username = $('#userName').val();
+                var password=$('#passWord').val();
+                var id = new Date().getTime() + Math.round(Math.random() * 1000000);
+                var data = {
+                    name: chatname,
+                    img: 'dist/images/1.jpg',
+                    id: id
+                };
+                var userMessage={
+                    name: username,
+                    password:password,
+                    img: 'dist/images/1.jpg',
+                    id: id
+                };
+                var information={
+                    userM:userMessage,
+                    chatM:data
+                };
+                console.log(information);
+                userIn=userMessage;
+                socket = io.connect('http://localhost:8888/')
+                socket.emit('newUser', information);
+                socket.on('start',function (information) {
+                    $('#outer').css('display','none');
+                    store = new Vuex.Store({
+                        state: {
+                            data: information,
+                            index: 0,
+                            search: ''
+                        },
+                        mutations: {
+                            changeIndex: function (state, i) {
+                                state.index = i;
+                            },
+                            addMessage: function (state, infor) {
+                                state.data.sessionList[state.index].messages.push(infor.message);
+                            },
+                            updateMessage: function (state, value) {
+                                state.search = value;
+                            }
+                        }
+                    });
+                    var card = {
+                        computed: {
+                            user: function () {
+                                return userIn;
+                            },
+                            search: function () {
+                                return store.state.search;
+                            }
+                        },
+                        methods: {
+                            updateMessage: function (e) {
+                                store.commit('updateMessage', e.target.value);
+
+                            }
+                        },
+                        template: '<div id="card" class="m-card"> <header> <img class="avatar" width="40" height="40" :alt="user.name" :src="user.img"> <p class="name">{{user.name}}</p> </header> <footer> <input class="search" type="text" placeholder="search user..."  @input="updateMessage"> </footer> </div>'
+                    };
+                    var list = {
+                        computed: {
+                            userList: function () {
+                                return store.state.data.userList;
+                            },
+                            sessionIndex: function () {
+                                return store.state.index;
+                            },
+                            session: function () {
+                                return store.state.data.sessionList[store.state.index];
+                            }
+                        },
+                        methods: {
+                            select: function (value) {
+                                var oIndex = store.state.data.userList.indexOf(value);
+                                store.commit('changeIndex', oIndex);
+
+
+                            },
+                            search: function (value) {
+                                return value.name.indexOf(store.state.search) > -1;
+                            }
+                        },
+                        template: '<div id="list" class="m-list"><ul><li v-for="item in userList"  v-if="search(item)"  :class="{ active: session.userId === item.id }" @click="select(item)"> <img class="avatar"  width="30" height="30" :alt="item.name" :src="item.img"> <p class="name">{{item.name}}</p></li> </ul> </div>'
+                    };
+                    var message = {
+                        computed: {
+                            session: function () {
+                                return store.state.data.sessionList[store.state.index];
+                            },
+                            user: function () {
+                                return userIn;
+                            },
+                            userList: function () {
+                                return store.state.data.userList;
+                            }
+
+                        },
+                        methods: {
+                            avatar: function (item) {
+                                var index=this.session.userId;
+                                if(item.self){
+                                    return this.user.img;
+                                }
+                                for(var i=0;i<this.userList.length;i++){
+                                    if(index==this.userList[i].id){
+                                        return this.userList[i].img;
+                                    }
+                                }
+
+                            },
+                            self: function (item) {
+                                if(item.id==userIn.id){
+                                    return 'self';
+                                }else{
+                                    return 'main';
+                                }
+
+
+                            }
+                        },
+                        filters: {
+                            time: function (date) {
+                                if (typeof date == 'string') {
+                                    date = new Date(date);
+                                }
+                                return date.getHours() + ":" + date.getMinutes();
+                            }
+
+                        },
+                        template: '<div id="message"><ul><li  v-for="item in session.messages"> <p class="time"><span>{{item.date | time}}</span></p> <div class="main" :class="self(item)"><p class="nameTop">{{item.name}}</p> <img class="avatar" :src="avatar(item)" alt="图片"/> <div class="text">{{item.text}}</div> </div> </li> </ul> </div>'
+
+                    };
+                    var send = {
+                        computed: {
+                            session: function () {
+                                return store.state.data.userList[store.state.index];
+                            },
+                            text:function () {
+                                return '';
+                            }
+                        },
+                        methods: {
+                            inputing: function (e) {
+                                if (e.ctrlKey && e.keyCode === 13 && e.target.value.length > 0) {
+                                    var newDate=new Date();
+                                    var infor = {
+                                        index:store.state.index,
+                                        message: {
+                                            text: e.target.value,
+                                            date: newDate,
+                                            id: userIn.id,
+                                            name:userIn.name
+                                        }
+
+                                    };
+                                    socket.emit('addMessage',infor);
+
+                                    this.text = '';
+                                }
+                            }
+                        },
+                        template: '<div class="m-text"><textarea placeholder="按 Ctrl + Enter 发送"  @keyup="inputing"></textarea> </div>'
+                    };
+                    var app=new Vue({
+                        el:'#chat',
+                        computed:{
+                            serverData:function(){
+                                return store.state.data;
+                            }
+                        },
+                        store,
+                        components:{card,list,message,send}
+                    });
+                })
+                socket.on('reLogin', function () {
+                    alert('群聊名已被使用，请刷新重新输入');
+                    socket.disconnect();
+                });
+                socket.on('reName', function () {
+                    alert('昵称已被使用或密码错误，请刷新重新输入');
+                    socket.disconnect();
+                });
+                socket.on('user', function (data) {
+                    userIn=data;
+                    console.log(userIn);
+                });
+                socket.on('empty', function () {
+                    alert('您的输入有空字符，请刷新重新输入');
+                    socket.disconnect();
+                });
+                socket.on('newdata',function (data) {
+                    store.state.data=data;
+                });
+                socket.on('data',function (data) {
+                    store.state.data=data;
+
+                });
+            });
+
+
+
+
+
+        })
+    </script>
+</body>
+</html>
